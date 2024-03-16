@@ -36,6 +36,14 @@ ___INFO___
 ___TEMPLATE_PARAMETERS___
 
 [
+    {
+    "type": "TEXT",
+    "name": "hardalAPIKey",
+    "displayName": "Hardal API Key",
+    "simpleValueType": true,
+    "help": "This will be allow you to add custom header if needed. This feature is currenty in beta.",
+    "canBeEmptyString": true
+  },
   {
     "type": "SELECT",
     "name": "inheritEventName",
@@ -217,7 +225,7 @@ ___TEMPLATE_PARAMETERS___
     "name": "accessToken",
     "displayName": "API Access Token",
     "simpleValueType": true,
-    "help": "Set to your Facebook API Access Token. See \u003ca href\u003d\"https://developers.facebook.com/docs/marketing-api/server-side-api/get-started#access-token\" target\u003d\"_blank\"\u003ehere\u003c/a\u003e for more information.",
+    "help": "Set to your Meta API Access Token. See \u003ca href\u003d\"https://developers.facebook.com/docs/marketing-api/server-side-api/get-started#access-token\" target\u003d\"_blank\"\u003ehere\u003c/a\u003e for more information.",
     "valueValidators": [
       {
         "type": "NON_EMPTY"
@@ -227,14 +235,14 @@ ___TEMPLATE_PARAMETERS___
   {
     "type": "TEXT",
     "name": "pixelId",
-    "displayName": "Facebook Pixel ID",
+    "displayName": "Meta Pixel ID",
     "simpleValueType": true,
     "valueValidators": [
       {
         "type": "NON_EMPTY"
       }
     ],
-    "help": "Set to a valid Facebook Pixel ID. You can only add a single Pixel ID per tag."
+    "help": "Set to a valid Meta Pixel ID. You can only add a single Pixel ID per tag."
   },
   {
     "type": "TEXT",
@@ -243,14 +251,6 @@ ___TEMPLATE_PARAMETERS___
     "simpleValueType": true,
     "help": "Provide a Test ID if you want to test server-side events in the Test Events feature of Events Manager.",
     "valueHint": "TEST123"
-  },
-  {
-    "type": "TEXT",
-    "name": "itemIdKey",
-    "displayName": "Custom Item Id Key",
-    "simpleValueType": true,
-    "help": "You can specify a custom key, which will be used to set the content item id, by default item_id will be used. This may be useful if you are using WooCommerce extensions.",
-    "canBeEmptyString": true
   },
   {
     "type": "CHECKBOX",
@@ -264,13 +264,6 @@ ___TEMPLATE_PARAMETERS___
     "checkboxText": "Use HttpOnly cookies",
     "simpleValueType": true,
     "help": "Forbids JavaScript from accessing the cookie if enabled."
-  },
-  {
-    "type": "CHECKBOX",
-    "name": "useOptimisticScenario",
-    "checkboxText": "Use Optimistic Scenario",
-    "simpleValueType": true,
-    "help": "The tag will call gtmOnSuccess() without waiting for a response from the API. This will speed up sGTM response time however your tag will always return the status fired successfully even in case it is not."
   },
   {
     "displayName": "Server Event Data Override",
@@ -740,21 +733,11 @@ sendHttpRequest(
         })
       );
     }
-    if (!data.useOptimisticScenario) {
-      if (statusCode >= 200 && statusCode < 300) {
-        data.gtmOnSuccess();
-      } else {
-        data.gtmOnFailure();
-      }
-    }
   },
   { headers: { 'content-type': 'application/json' }, method: 'POST' },
   JSON.stringify(postBody)
 );
 
-if (data.useOptimisticScenario) {
-  data.gtmOnSuccess();
-}
 function getEventName(data) {
   if (data.inheritEventName === 'inherit') {
     let eventName = eventData.event_name;
@@ -825,7 +808,6 @@ function mapEvent(eventData, data) {
   mappedData = addServerEventData(eventData, mappedData);
   mappedData = addUserData(eventData, mappedData);
   mappedData = addAppData(eventData, mappedData);
-  mappedData = addEcommerceData(eventData, mappedData);
   mappedData = overrideDataIfNeeded(mappedData);
   mappedData = cleanupData(mappedData);
   mappedData = hashDataIfNeeded(mappedData);
@@ -978,77 +960,6 @@ function isValidValue(value) {
   return valueType !== 'null' && valueType !== 'undefined' && value !== '';
 }
 
-function addEcommerceData(eventData, mappedData) {
-  let currencyFromItems = '';
-  let valueFromItems = 0;
-
-  if (eventData.items && eventData.items[0]) {
-    mappedData.custom_data.contents = [];
-    mappedData.custom_data.content_type = 'product';
-    currencyFromItems = eventData.items[0].currency;
-
-    if (!eventData.items[1]) {
-      if (eventData.items[0].item_name)
-        mappedData.custom_data.content_name = eventData.items[0].item_name;
-      if (eventData.items[0].item_category)
-        mappedData.custom_data.content_category =
-          eventData.items[0].item_category;
-
-      if (eventData.items[0].price) {
-        mappedData.custom_data.value = eventData.items[0].quantity
-          ? eventData.items[0].quantity * eventData.items[0].price
-          : eventData.items[0].price;
-      }
-    }
-
-    const itemIdKey = data.itemIdKey ? data.itemIdKey : 'item_id';
-    eventData.items.forEach((d, i) => {
-      let content = {};
-      if (d[itemIdKey]) content.id = d[itemIdKey];
-      if (d.item_name) content.title = d.item_name;
-      if (d.item_brand) content.brand = d.item_brand;
-      if (d.quantity) content.quantity = d.quantity;
-      if (d.item_category) content.category = d.item_category;
-
-      if (d.price) {
-        content.item_price = makeNumber(d.price);
-        valueFromItems += d.quantity
-          ? d.quantity * content.item_price
-          : content.item_price;
-      }
-
-      mappedData.custom_data.contents.push(content);
-    });
-  }
-
-  if (eventData['x-ga-mp1-ev'])
-    mappedData.custom_data.value = eventData['x-ga-mp1-ev'];
-  else if (eventData['x-ga-mp1-tr'])
-    mappedData.custom_data.value = eventData['x-ga-mp1-tr'];
-  else if (eventData.value) mappedData.custom_data.value = eventData.value;
-
-  if (eventData.currency) mappedData.custom_data.currency = eventData.currency;
-  else if (currencyFromItems)
-    mappedData.custom_data.currency = currencyFromItems;
-
-  if (eventData.search_term)
-    mappedData.custom_data.search_string = eventData.search_term;
-
-  if (eventData.transaction_id)
-    mappedData.custom_data.order_id = eventData.transaction_id;
-
-  if (mappedData.event_name === 'Purchase') {
-    if (!mappedData.custom_data.currency) {
-      mappedData.custom_data.currency = 'USD';
-    }
-
-    if (!mappedData.custom_data.value) {
-      mappedData.custom_data.value = valueFromItems ? valueFromItems : 0;
-    }
-  }
-
-  return mappedData;
-}
 
 function addUserData(eventData, mappedData) {
   let address = {};
