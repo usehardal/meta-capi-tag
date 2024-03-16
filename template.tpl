@@ -1,12 +1,4 @@
-﻿___TERMS_OF_SERVICE___
-
-By creating or modifying this file you agree to Google Tag Manager's Community
-Template Gallery Developer Terms of Service available at
-https://developers.google.com/tag-manager/gallery-tos (or such other URL as
-Google may provide), as modified from time to time.
-
-
-___INFO___
+﻿___INFO___
 
 {
   "type": "TAG",
@@ -36,13 +28,42 @@ ___INFO___
 ___TEMPLATE_PARAMETERS___
 
 [
-    {
+  {
     "type": "TEXT",
     "name": "hardalAPIKey",
     "displayName": "Hardal API Key",
     "simpleValueType": true,
     "help": "This will be allow you to add custom header if needed. This feature is currenty in beta.",
     "canBeEmptyString": true
+  },
+  {
+    "type": "TEXT",
+    "name": "customMetaEndpointURL",
+    "displayName": "CAPI Endpoint URL",
+    "simpleValueType": true,
+    "canBeEmptyString": true,
+    "help": "You can add your custom CAPI gateway URL when you want to send non-web event. Get details about non-web server events \u003ca href\u003d\"https://developers.facebook.com/docs/marketing-api/conversions-api/guides/gateway/non-web-server-events/\" target\u003d\"_blank\"\u003ehere\u003c/a\u003e."
+  },
+  {
+    "type": "SELECT",
+    "name": "apiVersion",
+    "displayName": "Endpoint API Version",
+    "macrosInSelect": false,
+    "selectItems": [
+      {
+        "value": 17,
+        "displayValue": "v17"
+      },
+      {
+        "value": 18,
+        "displayValue": "v18"
+      },
+      {
+        "value": 19,
+        "displayValue": "v19"
+      }
+    ],
+    "simpleValueType": true
   },
   {
     "type": "SELECT",
@@ -622,13 +643,15 @@ const traceId = isLoggingEnabled ? getRequestHeader('trace-id') : undefined;
 
 const eventData = getAllEventData();
 const url = eventData.page_location || getRequestHeader('referer');
+
+if (url) {
+  return data.gtmOnSuccess();
+}
+
+
 const subDomainIndex = url
   ? computeEffectiveTldPlusOne(url).split('.').length - 1
   : 1;
-
-if (url && url.lastIndexOf('https://gtm-msr.appspot.com/', 0) === 0) {
-  return data.gtmOnSuccess();
-}
 
 let fbc = getCookieValues('_fbc')[0];
 let fbp = getCookieValues('_fbp')[0];
@@ -667,19 +690,20 @@ if (!fbp && data.generateFbp) {
     generateRandom(1000000000, 2147483647);
 }
 
-const apiVersion = '17.0';
-const postUrl =
-  'https://graph.facebook.com/v' +
-  apiVersion +
-  '/' +
-  enc(data.pixelId) +
-  '/events?access_token=' +
-  enc(data.accessToken);
+const apiVersion = data.apiVersion;
+const customEndpointURL = data.customMetaEndpointURL;
 const mappedEventData = mapEvent(eventData, data);
 const postBody = {
   data: [mappedEventData],
   partner_agent: 'hardal-1.0.0',
 };
+const metaEndpointURL =
+  customEndpointURL ? customEndpointURL : 'https://graph.facebook.com/v' +
+  apiVersion +
+  '/' +
+  enc(data.pixelId) +
+  '/events?access_token=' +
+  enc(data.accessToken);
 
 if (eventData.test_event_code || data.testId) {
   postBody.test_event_code = eventData.test_event_code
@@ -695,7 +719,7 @@ if (isLoggingEnabled) {
       TraceId: traceId,
       EventName: mappedEventData.event_name,
       RequestMethod: 'POST',
-      RequestUrl: postUrl,
+      RequestUrl: metaEndpointURL,
       RequestBody: postBody,
     })
   );
@@ -718,7 +742,7 @@ if (fbp) {
   setCookie('_fbp', fbp, cookieOptions);
 }
 sendHttpRequest(
-  postUrl,
+  metaEndpointURL,
   (statusCode, headers, body) => {
     if (isLoggingEnabled) {
       logToConsole(
