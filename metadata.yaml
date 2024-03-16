@@ -1,5 +1,5 @@
 homepage: 'https://usehardal.com/'
 documentation: "https://docs.usehardal.com/"
 versions:
-  - sha: f976c77c04c3b1cd0a55dfd6bd88f0235d0b8e06
+  - sha: 7a3b66b5271f8d2cbf9083a2f3b9260a1183bbd3
     changeNotes: First release.
